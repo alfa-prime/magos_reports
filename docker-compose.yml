@@ -1,15 +1,16 @@
 services:
   app:
     build:
-      context: . # Собирать из текущей директории
+      context: .
       dockerfile: Dockerfile
-    container_name: ${DEV_CONTAINER_NAME} # Имя контейнера приложения
+    container_name: ${DEV_CONTAINER_NAME}
+    environment:
+      - TZ=Europe/Moscow
     env_file:
       - .env
     ports:
       - "${DEV_PORT}:8000"
     volumes:
-      # Монтируем код приложения для live reload (режим read-write по умолчанию)
       - ./app:/code/app
       - ./logs:/code/logs
     restart: unless-stopped
