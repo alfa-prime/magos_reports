@@ -1,5 +1,4 @@
 import httpx
-
 from app.core import get_settings
 from app.core.decorators import log_and_catch
 
@@ -18,11 +17,22 @@ class GatewayService:
             raise ValueError(f"Неподдерживаемый HTTP метод: {method}")
 
         http_method_func = getattr(self._client, method.lower())
-
-        # kwargs для декоратора должны содержать 'method' и 'url' для красивого логирования
         response = await http_method_func(url=self.GATEWAY_ENDPOINT, **kwargs)
-
-        # httpx.HTTPStatusError будет пойман декоратором, так что try...except не нужен
         response.raise_for_status()
-
         return response.json() if response.content else {}
+
+    @log_and_catch()
+    async def download(self, url: str, method: str = "POST", **kwargs) -> bytes:
+        """
+        Метод для скачивания файлов.
+        """
+        response = await self._client.request(method=method, url=url, **kwargs)
+
+        if response.status_code != 200:
+            raise httpx.HTTPStatusError(
+                f"Error {response.status_code}: {response.text[:200]}",
+                request=response.request,
+                response=response
+            )
+
+        return response.content

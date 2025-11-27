@@ -3,6 +3,7 @@ from .config import get_settings
 from .decorators import log_and_catch, route_handler
 from .dependencies import check_api_key, get_gateway_service
 from .logger_setup import logger
+from .mapper import PAY_TYPE_MAPPER
 
 __all__ = [
     "get_settings",
@@ -13,4 +14,5 @@ __all__ = [
     "get_gateway_service",
     "route_handler",
     "log_and_catch",
+    "PAY_TYPE_MAPPER"
 ]

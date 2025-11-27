@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
 from app.core import get_settings
-from app.service.gateway.gateway_service import GatewayService
+from app.service.gateway.gateway import GatewayService
 
 API_KEY_HEADER_SCHEME = APIKeyHeader(name="X-API-KEY", auto_error=False)
 settings = get_settings()

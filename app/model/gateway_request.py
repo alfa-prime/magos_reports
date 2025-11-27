@@ -1,7 +1,4 @@
-# Модель запроса к шлюзу API
-
 from typing import Any, Dict
-
 from pydantic import BaseModel, Field
 
 

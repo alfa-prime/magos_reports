@@ -1,4 +1,4 @@
-from .gateway.gateway_service import GatewayService
+from .gateway.gateway import GatewayService
 
 __all__ = [
     "GatewayService",

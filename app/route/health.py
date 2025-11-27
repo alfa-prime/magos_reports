@@ -1,6 +1,6 @@
 from typing import Annotated
-
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 
 from app.core import check_api_key, get_gateway_service
 from app.model import GatewayRequest
@@ -26,7 +26,7 @@ async def check():
     description="Отправляет тестовый запрос на API-шлюз для проверки связи и аутентификации.",
 )
 async def check_gateway_connection(
-    gateway_service: Annotated[GatewayService, Depends(get_gateway_service)],
+        gateway_service: Annotated[GatewayService, Depends(get_gateway_service)],
 ):
     payload_dict = {
         "params": {"c": "Common", "m": "getCurrentDateTime"},

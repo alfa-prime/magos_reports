@@ -17,7 +17,7 @@ jobs:
       - run: sudo cp cert.crt /etc/docker/certs.d/docker-hub.omnissiah-codex.internal/docker_registry.crt
       - run: sudo update-ca-certificates
 
-      - run: echo "CONTAINER_NAME=docker-hub.omnissiah-codex.internal/magos_smp" >> $GITHUB_ENV
+      - run: echo "CONTAINER_NAME=docker-hub.omnissiah-codex.internal/magos_reports" >> $GITHUB_ENV
       - run: echo ${{ env.CONTAINER_NAME }}
 
       - run: echo "VERSION_TAG=release-$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_ENV  
