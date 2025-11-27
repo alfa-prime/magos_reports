@@ -1,3 +1,4 @@
+from __future__ import annotations
 import io
 import asyncio
 from typing import List
@@ -12,6 +13,7 @@ from datetime import date, datetime
 import warnings
 
 from app.core import logger, PAY_TYPE_MAPPER
+from app.service.gateway.gateway import GatewayService
 from app.model.patient_with_services import PatientServiceRow
 from app.service.tool.tool import is_retryable_exception
 
@@ -22,7 +24,7 @@ from app.service.tool.tool import is_retryable_exception
     retry=retry_if_exception(is_retryable_exception),  # noqa
 )
 @alru_cache(maxsize=1000)
-async def _cached_search_hosp(gateway_service, card_number: str) -> dict:
+async def _cached_search_hosp(gateway_service: GatewayService, card_number: str) -> dict:
     payload = {
         "params": {"c": "Search", "m": "searchData"},
         "data": {
@@ -43,7 +45,7 @@ async def _cached_search_hosp(gateway_service, card_number: str) -> dict:
     retry=retry_if_exception(is_retryable_exception),  # noqa
 )
 @alru_cache(maxsize=1000)
-async def _cached_search_hosp_services(gateway_service, hosp_id: str) -> list[dict]:
+async def _cached_search_hosp_services(gateway_service: GatewayService, hosp_id: str) -> list[dict]:
     payload = {
         "params": {"c": "EvnUsluga", "m": "loadEvnUslugaGrid"},
         "data": {
@@ -128,7 +130,7 @@ def _process_excel_sync(content: bytes) -> List[PatientServiceRow]:
 async def get_list_patients_with_services(
         start_date: str,
         end_date: str,
-        gateway_service
+        gateway_service: GatewayService
 ) -> List[PatientServiceRow]:
     report_params = (
         f"paramLpu=13102423&"
