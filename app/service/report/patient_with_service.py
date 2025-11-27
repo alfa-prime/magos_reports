@@ -6,17 +6,20 @@ from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from async_lru import alru_cache
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception
+from openpyxl import Workbook
+from pydantic import BaseModel
+from datetime import date, datetime
+import warnings
 
 from app.core import logger, PAY_TYPE_MAPPER
 from app.model.patient_with_services import PatientServiceRow
 from app.service.tool.tool import is_retryable_exception
 
 
-
 @retry(
     stop=stop_after_attempt(5),  # Остановиться после 5 попыток (1 первая + 4 повторных)
     wait=wait_fixed(2),  # Ждать 2 секунды между попытками
-    retry=retry_if_exception(is_retryable_exception), # noqa
+    retry=retry_if_exception(is_retryable_exception),  # noqa
 )
 @alru_cache(maxsize=1000)
 async def _cached_search_hosp(gateway_service, card_number: str) -> dict:
@@ -37,10 +40,10 @@ async def _cached_search_hosp(gateway_service, card_number: str) -> dict:
 @retry(
     stop=stop_after_attempt(5),  # Остановиться после 5 попыток (1 первая + 4 повторных)
     wait=wait_fixed(2),  # Ждать 2 секунды между попытками
-    retry=retry_if_exception(is_retryable_exception), # noqa
+    retry=retry_if_exception(is_retryable_exception),  # noqa
 )
 @alru_cache(maxsize=1000)
-async def _cached_search_hosp_services(gateway_service, hosp_id: str):
+async def _cached_search_hosp_services(gateway_service, hosp_id: str) -> list[dict]:
     payload = {
         "params": {"c": "EvnUsluga", "m": "loadEvnUslugaGrid"},
         "data": {
@@ -49,7 +52,6 @@ async def _cached_search_hosp_services(gateway_service, hosp_id: str):
         }
     }
     return await gateway_service.make_request(method="post", json=payload)
-
 
 
 def _unmerge_and_fill_sheet(sheet: Worksheet):
@@ -79,7 +81,10 @@ def _process_excel_sync(content: bytes) -> List[PatientServiceRow]:
         raise ValueError(f"Полученный файл не является XLSX (ZIP). Начало файла: {preview}")
 
     input_stream = io.BytesIO(content)
-    workbook = load_workbook(input_stream, data_only=True)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+        workbook = load_workbook(input_stream, data_only=True)
 
     # 1. Снимаем объединения на всех листах
     for sheet in workbook.worksheets:
@@ -216,3 +221,40 @@ async def get_list_patients_with_services(
     except Exception as e:
         logger.error(f"[CLIENT] Ошибка парсинга или обработки: {e}", exc_info=True)
         raise HTTPException(500, "Ошибка обработки файла")
+
+
+def generate_excel_from_models(data_list: List[BaseModel]) -> io.BytesIO:
+    """
+    Генерирует Excel файл из списка Pydantic моделей.
+    Применяет форматирование дат ДД.ММ.ГГГГ.
+    """
+    output_stream = io.BytesIO()
+    work_book = Workbook()
+    sheet = work_book.active
+
+    # Если список пуст, возвращаем пустой файл (или можно добавить заголовки)
+    if not data_list:
+        work_book.save(output_stream)
+        output_stream.seek(0)
+        return output_stream
+
+    # Логика заполнения
+    for row in data_list:
+        # 1. Превращаем модель в словарь и берем значения
+        row_dict = row.model_dump()
+        row_values = list(row_dict.values())
+
+        # 2. Добавляем строку
+        sheet.append(row_values)
+
+        # 3. Форматирование дат
+        current_row = sheet[sheet.max_row]
+        for cell in current_row:
+            if isinstance(cell.value, (date, datetime)):
+                cell.number_format = 'DD.MM.YYYY'
+
+    # Сохраняем
+    work_book.save(output_stream)
+    output_stream.seek(0)
+
+    return output_stream

@@ -2,6 +2,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
+import os
 
 from app.core import get_settings, init_gateway_client, shutdown_gateway_client
 from app.route import router as api_router
@@ -38,3 +41,13 @@ app.add_middleware(
 
 
 app.include_router(api_router)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+# 2. Роут для главной страницы
+@app.get("/")
+async def read_root():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))

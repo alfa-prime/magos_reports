@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magos Reports</title>
+
+    <!-- Подключаем Vue.js (без сборки) -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Подключаем Axios для запросов -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <!-- Подключаем Tailwind CSS для красоты -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 h-screen overflow-hidden">
+
+<div id="app" class="flex h-full">
+
+    <!-- ЛЕВОЕ МЕНЮ (САЙДБАР) -->
+    <aside class="w-72 bg-slate-900 text-white flex flex-col shadow-2xl">
+        <div class="p-6 border-b border-slate-700">
+            <h1 class="text-xl font-bold text-blue-400 tracking-wider uppercase">Отчеты</h1>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto py-4">
+            <ul>
+                <li v-for="report in reports" :key="report.id">
+                    <button
+                        @click="selectReport(report)"
+                        class="w-full text-left px-6 py-4 transition-all duration-200 border-l-4"
+                        :class="selectedReport?.id === report.id ? 'bg-slate-800 border-blue-500 text-white' : 'border-transparent text-gray-400 hover:bg-slate-800 hover:text-white'"
+                    >
+                        <div class="font-medium">{{ report.name }}</div>
+                    </button>
+                </li>
+            </ul>
+        </nav>
+
+        <div class="p-4 text-center text-xs text-gray-600 bg-slate-950">
+            Gateway API Client v1.0
+        </div>
+    </aside>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <main class="flex-1 relative flex flex-col">
+
+        <!-- Если отчет не выбран -->
+        <div v-if="!selectedReport" class="flex-1 flex flex-col items-center justify-center text-gray-400">
+            <svg class="w-20 h-20 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <p class="text-lg">Выберите отчет в меню слева</p>
+        </div>
+
+        <!-- Если отчет выбран -->
+        <div v-else class="flex-1 p-10 overflow-y-auto">
+            <div class="max-w-3xl mx-auto">
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                    <h2 class="text-2xl font-bold mb-2">{{ selectedReport.name }}</h2>
+                    <p class="text-gray-500 mb-8">{{ selectedReport.description }}</p>
+
+                    <!-- Форма дат -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Дата начала</label>
+                            <input type="date" v-model="startDate" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Дата окончания</label>
+                            <input type="date" v-model="endDate" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Кнопка и статус -->
+                    <div class="flex items-center justify-between pt-6 border-t border-gray-100">
+                        <!-- Сообщение об ошибке -->
+                        <div v-if="error" class="text-red-600 text-sm font-semibold max-w-md">
+                            Ошибка: {{ error }}
+                        </div>
+                        <div v-else></div>
+
+                        <button
+                            @click="download"
+                            :disabled="isLoading"
+                            class="px-6 py-3 rounded-lg text-white font-medium transition-all shadow-md flex items-center gap-2"
+                            :class="isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 active:transform active:scale-95'"
+                        >
+                            <!-- Крутилка -->
+                            <svg v-if="isLoading" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            {{ isLoading ? 'Формирование...' : 'Получить отчет' }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Инфо блок при загрузке -->
+                <div v-if="isLoading" class="mt-6 p-4 bg-blue-50 text-blue-800 rounded-lg border border-blue-100 flex gap-3 items-start animate-pulse">
+                    <span class="text-xl">ℹ️</span>
+                    <div>
+                        <p class="font-bold">Идет обработка данных</p>
+                        <p class="text-sm mt-1 opacity-80">Это может занять до нескольких минут. Пожалуйста, подождите</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+</div>
+<script src="/static/script.js"></script>
+</body>
+</html>
