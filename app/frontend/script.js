@@ -1,71 +1,86 @@
-const { createApp, ref } = Vue;
+const { createApp, ref, reactive } = Vue;
 
 createApp({
     setup() {
-        // --- КОНФИГУРАЦИЯ ---
         const BACKEND_URL = '';
         const API_KEY = 'vmqZThci10eteSqy7dfF3FypJhV7grC6coCDr87LsPg';
 
-        // --- ДАННЫЕ ---
         const reports = ref([
             {
-                id: '32430',
-                name: 'Список пациентов с услугами по стационару',
-                description: 'Список пациентов с услугами по стационару + тип оплаты'
+              id: '32430',
+              name: 'Список пациентов с услугами по стационару',
+              description: 'Выгрузка списка пациентов по стационару с услугами и источником оплаты.'
             },
             {
-                id: 'invitro',
-                name: 'Анализы ИНВИТРО',
-                description: 'Отчет по лабораторным исследованиям Инвитро +  тип оплаты.'
+              id: 'invitro',
+              name: 'Анализы ИНВИТРО',
+              description: 'Отчет по лабораторным исследованиям Инвитро + тип оплаты'
             }
         ]);
 
         const selectedReport = ref(null);
-
-        // Даты по умолчанию (сегодня)
         const today = new Date().toISOString().split('T')[0];
         const startDate = ref(today);
         const endDate = ref(today);
 
-        const isLoading = ref(false);
-        const error = ref('');
+        // Список активных загрузок
+        const downloads = ref([]);
 
-        // --- МЕТОДЫ ---
         const selectReport = (report) => {
             selectedReport.value = report;
-            error.value = '';
+        };
+
+        // Хелпер для обновления статуса задачи в массиве
+        const updateDownloadStatus = (id, status, message) => {
+            const item = downloads.value.find(d => d.id === id);
+            if (item) {
+                item.status = status;
+                item.message = message;
+            }
+        };
+
+        const removeDownload = (id) => {
+            downloads.value = downloads.value.filter(d => d.id !== id);
         };
 
         const download = async () => {
             if (!selectedReport.value) return;
 
-            isLoading.value = true;
-            error.value = '';
+            const reportId = selectedReport.value.id;
+            const sDate = startDate.value;
+            const eDate = endDate.value;
+
+            // Генерируем ID для этой задачи
+            const taskId = Date.now();
+
+            // Создаем задачу и сразу кладем в реактивный массив
+            downloads.value.unshift({
+                id: taskId,
+                name: selectedReport.value.name,
+                status: 'loading',
+                message: 'Формирование отчета...',
+                startTime: new Date().toLocaleTimeString()
+            });
 
             try {
-                // Превращаем 2025-11-27 -> 27.11.2025 для API
                 const formatDate = (d) => d.split('-').reverse().join('.');
 
-                const response = await axios.get(`${BACKEND_URL}/report/${selectedReport.value.id}`, {
+                const response = await axios.get(`${BACKEND_URL}/report/${reportId}`, {
                     params: {
-                        start_date: formatDate(startDate.value),
-                        end_date: formatDate(endDate.value)
+                        start_date: formatDate(sDate),
+                        end_date: formatDate(eDate)
                     },
-                    responseType: 'blob', // Ждем файл
-                    headers: {
-                        'X-API-KEY': API_KEY
-                    }
+                    responseType: 'blob',
+                    headers: { 'X-API-KEY': API_KEY }
                 });
 
-                // Создаем ссылку и скачиваем
+                // Скачивание
                 const url = window.URL.createObjectURL(new Blob([response.data]));
                 const link = document.createElement('a');
                 link.href = url;
 
-                // Пытаемся достать имя файла из заголовков
                 const disposition = response.headers['content-disposition'];
-                let filename = `report_${selectedReport.value.id}.xlsx`;
-
+                let filename = `report_${reportId}.xlsx`;
                 if (disposition && disposition.indexOf('filename=') !== -1) {
                     const matches = /filename="?([^"]+)"?/.exec(disposition);
                     if (matches != null && matches[1]) filename = matches[1];
@@ -77,25 +92,34 @@ createApp({
                 link.remove();
                 window.URL.revokeObjectURL(url);
 
+                // ОБНОВЛЕНИЕ СТАТУСА (Через поиск в массиве)
+                updateDownloadStatus(taskId, 'success', 'Готово! Файл скачан.');
+
+                // Автоудаление через 5 сек
+                setTimeout(() => removeDownload(taskId), 5000);
+
             } catch (err) {
                 console.error(err);
-                // Если пришел Blob (файл), но внутри JSON с ошибкой
+
+                let errorMsg = 'Неизвестная ошибка';
+
                 if (err.response && err.response.data instanceof Blob) {
                     const reader = new FileReader();
                     reader.onload = () => {
                         try {
                             const json = JSON.parse(reader.result);
-                            error.value = json.detail || 'Ошибка сервера';
-                        } catch (e) {
-                            error.value = 'Ошибка при скачивании файла';
+                            errorMsg = json.detail || 'Ошибка сервера';
+                        } catch {
+                            errorMsg = 'Ошибка при чтении ответа';
                         }
+                        // Обновляем статус внутри коллбэка чтения
+                        updateDownloadStatus(taskId, 'error', errorMsg);
                     };
                     reader.readAsText(err.response.data);
                 } else {
-                    error.value = 'Сервер недоступен (проверьте VPN или сеть)';
+                    errorMsg = 'Сервер недоступен';
+                    updateDownloadStatus(taskId, 'error', errorMsg);
                 }
-            } finally {
-                isLoading.value = false;
             }
         };
 
@@ -105,9 +129,9 @@ createApp({
             selectReport,
             startDate,
             endDate,
-            isLoading,
-            error,
-            download
+            downloads,
+            download,
+            removeDownload
         };
     }
 }).mount('#app');
