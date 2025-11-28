@@ -56,6 +56,15 @@ class PatientServiceRow(BaseModel):
         "service_date": 27,
     }
 
+    @field_validator('full_name', mode='before')
+    def format_full_name(cls, v): # noqa
+        """Очищает строку и приводит к виду Title Case (Иванов Иван Иванович)"""
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "": return None
+            return v.title()  # .title() делает первую букву каждого слова заглавной
+        return v
+
     @field_validator('*', mode='before')
     def clean_strings(cls, v): # noqa
         """Очищает строки и превращает пустые/пробельные в None"""

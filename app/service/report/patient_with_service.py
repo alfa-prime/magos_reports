@@ -1,6 +1,7 @@
 from __future__ import annotations
 import io
 import asyncio
+import json
 from typing import List
 from fastapi import HTTPException
 from openpyxl import load_workbook
@@ -15,22 +16,18 @@ import warnings
 from app.core import logger, PAY_TYPE_MAPPER
 from app.service.gateway.gateway import GatewayService
 from app.model.patient_with_services import PatientServiceRow
-from app.service.tool.tool import is_retryable_exception
+from app.service.tool.tool import auto_cells_width, set_column_width, align_row_center, align_column_center
 
 
-@retry(
-    stop=stop_after_attempt(5),  # Остановиться после 5 попыток (1 первая + 4 повторных)
-    wait=wait_fixed(2),  # Ждать 2 секунды между попытками
-    retry=retry_if_exception(is_retryable_exception),  # noqa
-)
 @alru_cache(maxsize=1000)
-async def _cached_search_hosp(gateway_service: GatewayService, card_number: str) -> dict:
+async def _cached_search_hosp(gateway_service: GatewayService, card_number: str, hosp_start_date: str) -> dict:
     payload = {
         "params": {"c": "Search", "m": "searchData"},
         "data": {
             "PersonPeriodicType_id": 1,
             "SearchFormType": "EvnPS",
             "EvnPS_NumCard": card_number,
+            "EvnSection_setDate_Range": f"{hosp_start_date} - {hosp_start_date}",
             "Date_Type": 1,
             "SearchType_id": 1,
             "PersonCardStateType_id": 1,
@@ -39,11 +36,6 @@ async def _cached_search_hosp(gateway_service: GatewayService, card_number: str)
     return await gateway_service.make_request(method="post", json=payload)
 
 
-@retry(
-    stop=stop_after_attempt(5),  # Остановиться после 5 попыток (1 первая + 4 повторных)
-    wait=wait_fixed(2),  # Ждать 2 секунды между попытками
-    retry=retry_if_exception(is_retryable_exception),  # noqa
-)
 @alru_cache(maxsize=1000)
 async def _cached_search_hosp_services(gateway_service: GatewayService, hosp_id: str) -> list[dict]:
     payload = {
@@ -182,9 +174,10 @@ async def get_list_patients_with_services(
 
         for record in result:
             card_number = record.card_number
+            hosp_start_date = record.start_date.strftime("%d.%m.%Y")
             service_date = record.service_date.strftime("%d.%m.%Y")
             try:
-                patient_hosp_response = await _cached_search_hosp(gateway_service, card_number)
+                patient_hosp_response = await _cached_search_hosp(gateway_service, card_number, hosp_start_date)
                 hosp_data = patient_hosp_response.get("data")
 
                 # Проверка: нашли ли госпитализацию?
@@ -199,6 +192,10 @@ async def get_list_patients_with_services(
                 # Проверка: есть ли услуги?
                 if not services_response or not isinstance(services_response, list):
                     continue
+
+                if record.full_name == 'АБРОСИМОВА ЛЮДМИЛА ВИКТОРОВНА':
+                    with open('./logs/temp.json', 'w', encoding='utf8') as file:
+                        json.dump(services_response, file, indent=2, ensure_ascii=False)
 
                 for each in services_response:
                     api_date = each.get("EvnUsluga_setDate", "")
@@ -234,6 +231,12 @@ def generate_excel_from_models(data_list: List[BaseModel]) -> io.BytesIO:
     work_book = Workbook()
     sheet = work_book.active
 
+    titles = ["ФИО", "ДР", "Возраст", "Адрес", "Страховая", "Номер полиса", "Номер\nкарты",
+              "Поступление", "Выписка", "Результат", "Койко-дни", "Отделение", "Профиль", "Диагноз\nкод",
+              "Диагноз\nназвание", "Врач", "", "Код услуги", "Название", "Кол-во", "Дата", "Источник оплаты"]
+    sheet.append(titles)
+
+
     # Если список пуст, возвращаем пустой файл (или можно добавить заголовки)
     if not data_list:
         work_book.save(output_stream)
@@ -254,6 +257,29 @@ def generate_excel_from_models(data_list: List[BaseModel]) -> io.BytesIO:
         for cell in current_row:
             if isinstance(cell.value, (date, datetime)):
                 cell.number_format = 'DD.MM.YYYY'
+
+    # автоширина всех колонок
+    auto_cells_width(sheet)
+
+    # задаем ширину колонок принудительно
+    set_column_width(sheet=sheet, column_letter="D", width=45)
+    set_column_width(sheet=sheet, column_letter="E", width=45)
+    set_column_width(sheet=sheet, column_letter="L", width=45)
+    set_column_width(sheet=sheet, column_letter="M", width=45)
+    set_column_width(sheet=sheet, column_letter="Q", width=45)
+    set_column_width(sheet=sheet, column_letter="S", width=45)
+
+    # выравнивание первой строки по центру
+    rows_to_align = [1]
+    align_row_center(sheet, rows_to_align)
+
+    # выравнивание колонок по центру
+    columns_to_align = ["B", "C", "H", "I", "K", "T", "U"]
+    align_column_center(sheet, columns_to_align)
+
+    # включить АВТОФИЛЬТР
+    # sheet.dimensions вернет строку вида "A1:K150"
+    sheet.auto_filter.ref = sheet.dimensions
 
     # Сохраняем
     work_book.save(output_stream)

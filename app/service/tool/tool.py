@@ -5,19 +5,6 @@ from openpyxl.styles import Alignment
 
 CENTER_ALIGNED = Alignment(horizontal='center', vertical='center')
 
-def is_retryable_exception(exception) -> bool:
-    """Возвращает True, если исключение - это ошибка, которую стоит повторить."""
-    if isinstance(exception, (
-            httpx.ReadError,
-            httpx.ConnectError,
-            httpx.ReadTimeout,
-            httpx.ConnectTimeout,
-            httpx.WriteTimeout
-    )):
-        return True
-
-    return False
-
 
 def auto_cells_width(sheet: Worksheet):
     for col in sheet.columns:
